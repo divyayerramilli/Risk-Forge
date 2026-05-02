@@ -1,0 +1,103 @@
+"""Tests for the DEI scoring engine."""
+
+import unittest
+
+from dei_underwriting.data import SAMPLE_COMPANIES
+from dei_underwriting.export import result_to_row
+from dei_underwriting.models import CompanyProfile
+from dei_underwriting.scoring import categorize_score, score_company, score_companies
+
+
+class ScoringTests(unittest.TestCase):
+    def test_sample_portfolio_has_required_size_and_valid_scores(self) -> None:
+        results = score_companies(SAMPLE_COMPANIES)
+
+        self.assertGreaterEqual(len(results), 15)
+
+        for result in results:
+            self.assertGreaterEqual(result.dei_score, 0)
+            self.assertLessEqual(result.dei_score, 100)
+            self.assertIn(result.risk_tier, {"Low", "Moderate", "Elevated", "Severe"})
+            self.assertTrue(result.key_risk_drivers)
+            self.assertIn("recommended underwriting decision", result.explanation)
+
+    def test_security_maturity_reduces_risk(self) -> None:
+        low_maturity = CompanyProfile(
+            company_name="Control Test Company",
+            industry="finance",
+            annual_revenue=500_000_000,
+            employee_count=1_200,
+            data_sensitivity="high",
+            cloud_dependency="high",
+            remote_workforce_percentage=50,
+            third_party_vendor_exposure="medium",
+            security_maturity="low",
+            historical_incident_count=1,
+            regulatory_exposure="high",
+        )
+        high_maturity = CompanyProfile(
+            company_name=low_maturity.company_name,
+            industry=low_maturity.industry,
+            annual_revenue=low_maturity.annual_revenue,
+            employee_count=low_maturity.employee_count,
+            data_sensitivity=low_maturity.data_sensitivity,
+            cloud_dependency=low_maturity.cloud_dependency,
+            remote_workforce_percentage=low_maturity.remote_workforce_percentage,
+            third_party_vendor_exposure=low_maturity.third_party_vendor_exposure,
+            security_maturity="high",
+            historical_incident_count=low_maturity.historical_incident_count,
+            regulatory_exposure=low_maturity.regulatory_exposure,
+        )
+
+        low_result = score_company(low_maturity)
+        high_result = score_company(high_maturity)
+
+        self.assertEqual(low_result.dei_score - 18, high_result.dei_score)
+
+    def test_risk_tier_boundaries(self) -> None:
+        self.assertEqual(categorize_score(35), "Low")
+        self.assertEqual(categorize_score(35.1), "Moderate")
+        self.assertEqual(categorize_score(60), "Moderate")
+        self.assertEqual(categorize_score(60.1), "Elevated")
+        self.assertEqual(categorize_score(80), "Elevated")
+        self.assertEqual(categorize_score(80.1), "Severe")
+
+    def test_csv_row_contains_inputs_outputs_and_scoring_components(self) -> None:
+        result = score_company(SAMPLE_COMPANIES[0])
+        row = result_to_row(result)
+
+        expected_fields = {
+            "company_name",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "data_sensitivity",
+            "cloud_dependency",
+            "remote_workforce_percentage",
+            "third_party_vendor_exposure",
+            "security_maturity",
+            "historical_incident_count",
+            "regulatory_exposure",
+            "dei_score",
+            "risk_tier",
+            "underwriting_decision",
+            "premium_range",
+            "estimated_risk_profile_summary",
+            "key_risk_drivers",
+            "recommended_mitigation_actions",
+            "explanation",
+            "industry_exposure_points",
+            "data_sensitivity_points",
+            "cloud_dependency_points",
+            "vendor_exposure_points",
+            "workforce_distribution_points",
+            "prior_incidents_points",
+            "regulatory_exposure_points",
+            "security_maturity_credit",
+        }
+
+        self.assertEqual(set(row), expected_fields)
+
+
+if __name__ == "__main__":
+    unittest.main()
