@@ -1,4 +1,4 @@
-# Cyber Risk Underwriting Engine (Digital Exposure Index)
+# Risk Forge(Digital Exposure Index)
 
 An explainable cyber risk underwriting engine that scores organizations using a Digital Exposure Index (DEI) and simulates how real underwriting decisions are made.
 
